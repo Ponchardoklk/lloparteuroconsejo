@@ -1,5 +1,5 @@
 import { createScene } from './scene.js';
-import { ACTIVITY, PROPERTIES, STATUS, TYPES } from './data.js';
+import { ACTIVITY, PROPERTIES, STATUS, TYPES, ZONES } from './data.js';
 
 const $ = (s) => document.querySelector(s);
 const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -7,7 +7,9 @@ const num = new Intl.NumberFormat('es-ES');
 const fmtDate = (iso) => (iso && iso.includes('-') ? new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : iso || '—');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const state = { selected: null, status: 'todos', query: '', night: false };
+const state = { selected: null, status: 'todos', query: '', night: false, zone: 'bcn' };
+const inZone = (p) => state.zone === 'all' || p.zone === state.zone;
+const zoneProps = () => PROPERTIES.filter(inZone);
 const byId = new Map(PROPERTIES.map((p) => [p.id, p]));
 
 // ---------------------------------------------------------------------------------------
@@ -20,14 +22,16 @@ const scene = createScene($('#scene'), PROPERTIES, {
 // ---------------------------------------------------------------------------------------
 // KPIs
 function renderKpis() {
-  const total = PROPERTIES.length;
-  const rented = PROPERTIES.filter((p) => p.status === 'alquilado').length;
-  const income = PROPERTIES.filter((p) => p.status === 'alquilado').reduce((s, p) => s + p.rent, 0);
-  const openInc = PROPERTIES.reduce((s, p) => s + p.incidents.filter((i) => i.state !== 'programada').length, 0);
-  const high = PROPERTIES.reduce((s, p) => s + p.incidents.filter((i) => i.priority === 'alta').length, 0);
-  const late = PROPERTIES.filter((p) => p.payments.at(-1) === 'late').length;
+  const list = zoneProps();
+  const total = list.length;
+  const rented = list.filter((p) => p.status === 'alquilado').length;
+  const income = list.filter((p) => p.status === 'alquilado').reduce((s, p) => s + p.rent, 0);
+  const openInc = list.reduce((s, p) => s + p.incidents.filter((i) => i.state !== 'programada').length, 0);
+  const high = list.reduce((s, p) => s + p.incidents.filter((i) => i.priority === 'alta').length, 0);
+  const late = list.filter((p) => p.payments.at(-1) === 'late').length;
+  const where = state.zone === 'all' ? 'Inmuebles gestionados' : `Inmuebles · ${ZONES[state.zone].label}`;
   const cards = [
-    { icon: 'home', label: 'Inmuebles gestionados', value: total, sub: `${num.format(PROPERTIES.reduce((s, p) => s + p.m2, 0))} m² en cartera` },
+    { icon: 'home', label: where, value: total, sub: `${num.format(list.reduce((s, p) => s + p.m2, 0))} m² en cartera` },
     { icon: 'key', label: 'Ocupación', value: `${Math.round((rented / total) * 100)}%`, sub: `${rented} alquilados · ${total - rented} libres/obra`, bar: rented / total },
     { icon: 'euro', label: 'Renta mensual', value: eur.format(income), sub: late ? `${late} recibo pendiente` : 'Todo cobrado', tone: late ? 'warn' : 'ok' },
     { icon: 'tool', label: 'Incidencias abiertas', value: openInc, sub: high ? `${high} de prioridad alta` : 'Sin urgencias', tone: high ? 'bad' : 'ok' },
@@ -47,6 +51,7 @@ function renderKpis() {
 // ---------------------------------------------------------------------------------------
 // Filtros, listado y leyenda
 function matches(p) {
+  if (!state.query && !inZone(p)) return false;
   if (state.status !== 'todos' && p.status !== state.status) return false;
   if (!state.query) return true;
   const hay = [p.name, p.address, p.city, p.id, p.owner, p.tenant?.name, TYPES[p.type]].join(' ').toLowerCase();
@@ -54,7 +59,8 @@ function matches(p) {
 }
 
 function renderFilters() {
-  const opts = [['todos', 'Todos', PROPERTIES.length], ...Object.entries(STATUS).map(([k, v]) => [k, v.label, PROPERTIES.filter((p) => p.status === k).length])];
+  const list = zoneProps();
+  const opts = [['todos', 'Todos', list.length], ...Object.entries(STATUS).map(([k, v]) => [k, v.label, list.filter((p) => p.status === k).length])];
   $('#filters').innerHTML = opts
     .map(([k, label, n]) => `<button class="chip ${state.status === k ? 'on' : ''}" data-status="${k}" style="${k !== 'todos' ? `--c:${STATUS[k].color}` : ''}">${k !== 'todos' ? '<i></i>' : ''}${label}<span>${n}</span></button>`)
     .join('');
@@ -93,6 +99,28 @@ $('#search').addEventListener('input', (e) => {
   renderList();
   const list = PROPERTIES.filter(matches);
   if (state.query && list.length === 1) select(list[0].id);
+});
+
+function renderZones() {
+  const opts = [...Object.entries(ZONES).map(([k, z]) => [k, z.label, PROPERTIES.filter((p) => p.zone === k).length]), ['all', 'Ambas', PROPERTIES.length]];
+  $('#zones').innerHTML = opts
+    .map(([k, label, n]) => `<button class="zone ${state.zone === k ? 'on' : ''}" data-zone="${k}" aria-pressed="${state.zone === k}">${label}<span>${n}</span></button>`)
+    .join('');
+}
+
+function setZone(key, { keepSelection = false } = {}) {
+  state.zone = key;
+  scene.setZone(key);
+  if (!keepSelection) select(null);
+  renderZones();
+  renderKpis();
+  renderFilters();
+  renderList();
+}
+
+$('#zones').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-zone]');
+  if (b && b.dataset.zone !== state.zone) setZone(b.dataset.zone);
 });
 
 function renderActivity() {
@@ -220,6 +248,7 @@ function select(id) {
     scene.resetView();
   } else {
     const p = byId.get(id);
+    if (state.zone !== 'all' && p.zone !== state.zone) setZone(p.zone, { keepSelection: true });
     panel.innerHTML = panelHtml(p);
     panel.classList.add('open');
     panel.setAttribute('aria-hidden', 'false');
@@ -289,6 +318,7 @@ const ICONS = {
   nave: svg('<path d="M2 20V10a10 6 0 0120 0v10z"/><path d="M7 20v-6h10v6"/>'),
 };
 
+renderZones();
 renderKpis();
 renderFilters();
 renderList();

@@ -37,6 +37,12 @@ export const M = {
   leafDark: new THREE.MeshStandardMaterial({ color: '#4f9e4a', roughness: 1, flatShading: true }),
   scaffold: new THREE.MeshStandardMaterial({ color: '#f2a93b', roughness: 0.6 }),
   crane: new THREE.MeshStandardMaterial({ color: '#f5c026', roughness: 0.6 }),
+  slate: new THREE.MeshStandardMaterial({ color: '#4b5262', roughness: 0.85 }),
+  slateDark: new THREE.MeshStandardMaterial({ color: '#3a404d', roughness: 0.85 }),
+  stone: new THREE.MeshStandardMaterial({ color: '#c8b896', roughness: 1 }),
+  wood: new THREE.MeshStandardMaterial({ color: '#8a5a3b', roughness: 0.9 }),
+  snow: new THREE.MeshStandardMaterial({ color: '#fbfdff', roughness: 0.9 }),
+  pine: new THREE.MeshStandardMaterial({ color: '#3f7f52', roughness: 1, flatShading: true }),
   lamp: new THREE.MeshStandardMaterial({ color: '#fff4c9', emissive: '#ffd27a', emissiveIntensity: 0.1 }),
 };
 
@@ -121,14 +127,26 @@ function lot(group, w, d, mat = M.paving) {
 // ---------------------------------------------------------------------------
 // Tipos de inmueble. Cada constructor devuelve la altura total para colocar el marcador.
 
+const isMountain = (p) => p.zone === 'pcd';
+const roofOf = (p, dark) => (isMountain(p) ? (dark ? M.slateDark : M.slate) : dark ? M.roofDark : M.roof);
+
+// Chimenea; en la montaña humea (el humo lo anima la escena).
+function chimney(g, x, y, z, anim, smoking) {
+  const c = boxAt(g, 0.5, 1.4, 0.5, M.stone, x, y, z);
+  if (smoking) anim.chimneys.push(c);
+  return c;
+}
+
 function buildChalet(g, p, anim) {
   lot(g, 9, 9, M.grass);
-  boxAt(g, 5.4, 3, 4.2, M.wall, -0.8, 0.2, -1);
+  const wallMat = isMountain(p) ? M.stone : M.wall;
+  boxAt(g, 5.4, 3, 4.2, wallMat, -0.8, 0.2, -1);
   boxAt(g, 3, 2.2, 3, M.wall, 1.9, 0.2, -1.6);
-  const r1 = gableRoof(6.0, 1.8, 4.8, M.roof);
+  chimney(g, -2.6, 3.6, -1.6, anim, isMountain(p));
+  const r1 = gableRoof(6.0, 1.8, 4.8, roofOf(p));
   r1.position.set(-0.8, 3.2, -1);
   g.add(r1);
-  const r2 = gableRoof(3.4, 1.2, 3.4, M.roofDark);
+  const r2 = gableRoof(3.4, 1.2, 3.4, roofOf(p, true));
   r2.rotation.y = Math.PI / 2;
   r2.position.set(1.9, 2.4, -1.6);
   g.add(r2);
@@ -136,11 +154,16 @@ function buildChalet(g, p, anim) {
   windows(g, { w: 5.4, d: 4.2, y0: 0.2, floors: 2, floorH: 1.45, cols: 3, colsD: 2, cx: -0.8, cz: -1, size: [0.6, 0.6], skipGroundFront: false });
   // Porche
   boxAt(g, 2.4, 0.12, 1.4, M.paving, -0.8, 0.2, 1.8);
-  // Piscina
-  boxAt(g, 3.6, 0.15, 2.2, M.white, 2.2, 0.2, 2.6);
-  const water = boxAt(g, 3.2, 0.1, 1.8, M.water, 2.2, 0.28, 2.6);
-  water.castShadow = false;
-  anim.pools.push(water);
+  if (p.features.some((f) => f.startsWith('Piscina'))) {
+    boxAt(g, 3.6, 0.15, 2.2, M.white, 2.2, 0.2, 2.6);
+    const water = boxAt(g, 3.2, 0.1, 1.8, M.water, 2.2, 0.28, 2.6);
+    water.castShadow = false;
+    anim.pools.push(water);
+  } else {
+    // Leña apilada y bancal
+    for (let i = 0; i < 3; i++) boxAt(g, 1.6, 0.35, 0.6, M.wood, 2.2, 0.2 + i * 0.36, 3.2);
+    boxAt(g, 2.6, 0.1, 1.4, M.grassDark, 2.2, 0.2, 1.6);
+  }
   // Setos y árboles
   hedgeRow(g, 0, -4.2, 8.6, true);
   hedgeRow(g, -4.2, 0, 8.6, false);
@@ -156,12 +179,13 @@ function buildAdosados(g, p, anim) {
     const x = -2.9 + i * 2.9;
     boxAt(g, 2.8, 3.4, 4.2, cols[i], x, 0.2, -1);
     // tejado con cumbrera paralela a la calle
-    const r2 = gableRoof(4.6, 1.3, 2.95, i === 1 ? M.roofDark : M.roof);
+    const r2 = gableRoof(4.6, 1.3, 2.95, roofOf(p, i === 1));
     r2.rotation.y = Math.PI / 2;
     r2.position.set(x, 3.6, -1);
     g.add(r2);
     boxAt(g, 0.7, 1.5, 0.1, M.door, x - 0.6, 0.2, 1.12);
     windows(g, { w: 2.8, d: 4.2, y0: 0.2, floors: 2, floorH: 1.6, cols: 2, colsD: i === 0 || i === 2 ? 2 : 0, cx: x, cz: -1, size: [0.55, 0.65] });
+    chimney(g, x + 0.9, 3.9, -2.2, anim, isMountain(p) && i !== 1);
     // Placas solares
     const panel = boxAt(g, 1.6, 0.06, 1.1, M.glassDark, x, 4.05, 0.05);
     panel.rotation.x = -0.5;
@@ -353,7 +377,39 @@ function buildNave(g, p, anim) {
   return 6.3;
 }
 
+// Casa de pueblo de piedra con tejado de pizarra (Cerdanya)
+function buildMasia(g, p, anim) {
+  lot(g, 9.5, 9, M.grass);
+  boxAt(g, 6.4, 3.6, 4.6, M.stone, -0.6, 0.2, -1.2);
+  const r = gableRoof(7.2, 2.2, 5.4, M.slate);
+  r.position.set(-0.6, 3.8, -1.2);
+  g.add(r);
+  // Nieve en la cumbrera
+  const snowCap = gableRoof(1.9, 0.6, 5.5, M.snow);
+  snowCap.position.set(-0.6, 5.44, -1.2);
+  g.add(snowCap);
+  boxAt(g, 3, 2.2, 3, M.stone, 3.6, 0.2, -2.0); // pajar / anexo
+  const r2 = gableRoof(3.6, 1, 3.4, M.slateDark);
+  r2.rotation.y = Math.PI / 2;
+  r2.position.set(3.6, 2.4, -2.0);
+  g.add(r2);
+  boxAt(g, 1.2, 1.9, 0.1, M.wood, 3.6, 0.2, -0.45); // portalón
+  boxAt(g, 0.9, 1.8, 0.1, M.door, -1.6, 0.2, 1.12);
+  windows(g, { w: 6.4, d: 4.6, y0: 0.2, floors: 2, floorH: 1.7, cols: 3, colsD: 2, cx: -0.6, cz: -1.2, size: [0.55, 0.75] });
+  // Balcón de madera corrido
+  boxAt(g, 6.4, 0.12, 0.8, M.wood, -0.6, 2.0, 1.5);
+  for (let i = 0; i <= 8; i++) boxAt(g, 0.06, 0.6, 0.06, M.wood, -3.8 + i * 0.8, 2.1, 1.85);
+  boxAt(g, 6.4, 0.06, 0.06, M.wood, -0.6, 2.7, 1.85);
+  chimney(g, -3.0, 4.6, -2.2, anim, true);
+  // Huerto y leña
+  for (let i = 0; i < 3; i++) boxAt(g, 2.6, 0.18, 0.5, M.grassDark, -2, 0.2, 2.9 + i * 0.6);
+  for (let i = 0; i < 3; i++) boxAt(g, 1.4, 0.3, 0.6, M.wood, 3.4, 0.2 + i * 0.31, 2.6);
+  anim.trees.push(pine(g, -4.2, 3.6, 0.8), pine(g, 4.2, 3.8, 0.7, true));
+  return 7;
+}
+
 const BUILDERS = {
+  masia: buildMasia,
   chalet: buildChalet,
   adosado: buildAdosados,
   edificio: buildEdificio,
@@ -363,6 +419,23 @@ const BUILDERS = {
   oficina: buildOficina,
   nave: buildNave,
 };
+
+export function pine(parent, x, z, s = 1, snow = false) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  mesh(new THREE.CylinderGeometry(0.12 * s, 0.16 * s, 0.9 * s, 6), M.trunk, 0, 0.45 * s, 0, g);
+  const crown = new THREE.Group();
+  crown.position.y = 0.6 * s;
+  g.add(crown);
+  for (let k = 0; k < 3; k++) {
+    const r = (1.1 - k * 0.28) * s;
+    mesh(new THREE.ConeGeometry(r, 1.3 * s, 7), M.pine, 0, (0.6 + k * 0.75) * s, 0, crown);
+    if (snow) mesh(new THREE.ConeGeometry(r * 0.55, 0.6 * s, 7), M.snow, 0, (0.95 + k * 0.75) * s, 0, crown);
+  }
+  crown.userData.sway = rand() * Math.PI * 2;
+  parent.add(g);
+  return crown;
+}
 
 export function buildProperty(p, anim) {
   const g = new THREE.Group();
@@ -448,4 +521,30 @@ export function streetLamp(parent, x, z) {
   mesh(new THREE.CylinderGeometry(0.06, 0.08, 3, 6), M.dark, 0, 1.5, 0, g);
   mesh(new THREE.SphereGeometry(0.22, 10, 8), M.lamp, 0, 3.05, 0, g).castShadow = false;
   parent.add(g);
+}
+
+// Señal de carretera azul con destino
+export function roadSign(text) {
+  const c = document.createElement('canvas');
+  c.width = 320;
+  c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1d4ed8';
+  x.fillRect(0, 0, 320, 96);
+  x.strokeStyle = '#fff';
+  x.lineWidth = 6;
+  x.strokeRect(8, 8, 304, 80);
+  x.fillStyle = '#fff';
+  x.font = 'bold 40px system-ui, sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(text, 160, 50);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const g = new THREE.Group();
+  for (const px of [-1.2, 1.2]) mesh(new THREE.CylinderGeometry(0.07, 0.07, 3, 6), M.metal, px, 1.5, 0, g);
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.1), new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide }));
+  board.position.y = 3;
+  g.add(board);
+  return g;
 }
