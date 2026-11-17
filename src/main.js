@@ -1,5 +1,7 @@
 import { createScene } from './scene.js';
-import { ACTIVITY, PROPERTIES, STATUS, TYPES, ZONES } from './data.js';
+import { ACTIVITY, CONTRACTS, DEMO_TODAY, PROPERTIES, STATUS, TYPES, ZONES } from './data.js';
+import { nextReview } from './ledger.js';
+import { createLibrary } from './library.js';
 
 const $ = (s) => document.querySelector(s);
 const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -18,6 +20,8 @@ const scene = createScene($('#scene'), PROPERTIES, {
   onSelect: (id) => select(id),
   onHover: (id, x, y) => showTooltip(id, x, y),
 });
+
+const library = createLibrary($('#app'), { contractsFor: (id) => CONTRACTS[id] || [] });
 
 // ---------------------------------------------------------------------------------------
 // KPIs
@@ -129,80 +133,74 @@ function renderActivity() {
 
 // ---------------------------------------------------------------------------------------
 // Panel de detalle
-const MONTHS = (() => {
-  const out = [];
-  const d = new Date(2026, 10, 1); // noviembre 2026: último mes de los datos de ejemplo
-  for (let i = 5; i >= 0; i--) {
-    const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
-    out.push(m.toLocaleDateString('es-ES', { month: 'short' }).replace('.', ''));
-  }
-  return out;
-})();
-
-function contractProgress(t) {
-  if (!t?.since || !t?.until || !t.until.includes('-')) return null;
-  const a = new Date(t.since).getTime();
-  const b = new Date(t.until).getTime();
-  const now = Date.now();
-  const pct = Math.min(1, Math.max(0, (now - a) / (b - a)));
-  const monthsLeft = Math.round((b - now) / (1000 * 60 * 60 * 24 * 30.4));
-  return { pct, monthsLeft, future: now < a };
-}
-
 function initials(name) {
   return name.split(' ').map((w) => w[0]).filter((c) => /[A-ZÀ-Ú]/.test(c)).slice(0, 2).join('');
 }
 
+function monthsUntil(iso) {
+  const ms = new Date(iso + 'T12:00:00').getTime() - new Date(DEMO_TODAY + 'T12:00:00').getTime();
+  return Math.round(ms / (1000 * 60 * 60 * 24 * 30.44));
+}
+
+function contactRows(k) {
+  return `<ul class="contact">
+    ${k.contact ? `<li><span class="c-ico">👤</span><span>${esc(k.contact)}</span></li>` : ''}
+    <li><span class="c-ico">📞</span><a href="tel:${k.phone.replace(/\s/g, '')}">${esc(k.phone)}</a><button class="copy" data-copy="${esc(k.phone)}" aria-label="Copiar teléfono">Copiar</button></li>
+    <li><span class="c-ico">✉️</span><a href="mailto:${esc(k.email)}">${esc(k.email)}</a><button class="copy" data-copy="${esc(k.email)}" aria-label="Copiar correo">Copiar</button></li>
+  </ul>`;
+}
+
+function termTiles(k) {
+  const left = monthsUntil(k.end);
+  const review = nextReview(k);
+  return `<div class="terms">
+    <div><small>Renta mensual</small><b>${eur.format(k.rent)}</b><span>Pago del 1 al 5 de cada mes</span></div>
+    <div class="${left <= 9 ? 'attention' : ''}"><small>Vencimiento</small><b>${fmtDate(k.end)}</b><span>${left <= 0 ? 'Vencido' : left <= 9 ? `⚠ Quedan ${left} ${left === 1 ? 'mes' : 'meses'}` : `Quedan ${left} meses`}</span></div>
+    <div><small>Próxima revisión</small><b>${review ? fmtDate(review) : '—'}</b><span>${review ? 'Actualización anual de renta' : 'Sin revisión pendiente'}</span></div>
+    <div><small>Fianza</small><b>${eur.format(k.deposit)}</b><span>${k.depositMonths} ${k.depositMonths === 1 ? 'mensualidad' : 'mensualidades'} · INCASÒL${k.guarantee ? ` · + ${eur.format(k.guarantee)} garantía` : ''}</span></div>
+  </div>`;
+}
+
 function panelHtml(p) {
   const st = STATUS[p.status];
-  const cp = contractProgress(p.tenant);
-  const metrics = [
-    [p.status === 'alquilado' ? 'Renta mensual' : 'Renta prevista', eur.format(p.rent)],
-    ['Superficie', `${num.format(p.m2)} m²${p.plot ? ` <small>· parcela ${num.format(p.plot)} m²</small>` : ''}`],
-    p.units ? ['Unidades', p.units] : ['Habitaciones', p.rooms || '—'],
-    ['Baños', p.baths],
-    ['Año', p.year],
-    ['Cert. energético', `<span class="energy e-${String(p.energy)[0].toLowerCase()}">${esc(p.energy)}</span>`],
-  ];
-  const incidents = p.incidents.length
-    ? p.incidents
-        .map((i) => `<li><span class="prio p-${i.priority}">${i.priority}</span><span><b>${esc(i.title)}</b><small>${fmtDate(i.date)} · ${i.state}</small></span></li>`)
-        .join('')
-    : '<li class="none">✓ Sin incidencias abiertas</li>';
-
-  let occupancy = '';
-  if (p.reform) {
-    const r = p.reform;
-    occupancy = `<section class="sec">
-      <h4>Reforma en curso</h4>
-      <div class="progress"><i style="width:${r.progress * 100}%;background:${st.color}"></i></div>
-      <div class="row-between"><span>${Math.round(r.progress * 100)}% completado</span><span>Fin previsto ${fmtDate(r.end)}</span></div>
-      <dl class="kv">
-        <dt>Empresa</dt><dd>${esc(r.company)}</dd>
-        <dt>Presupuesto</dt><dd>${eur.format(r.budget)}</dd>
-        <dt>Ejecutado</dt><dd>${eur.format(r.spent)} <small>(${Math.round((r.spent / r.budget) * 100)}%)</small></dd>
-      </dl></section>`;
-  } else if (p.tenant) {
-    occupancy = `<section class="sec">
-      <h4>${p.status === 'reservado' ? 'Reserva' : 'Inquilino'}</h4>
-      <div class="tenant"><span class="avatar sm">${initials(p.tenant.name) || ICONS.key}</span>
-        <span><b>${esc(p.tenant.name)}</b><small>${p.tenant.phone ? esc(p.tenant.phone) : 'Contrato gestionado por Llopart'}</small></span></div>
-      ${cp ? `<div class="progress"><i style="width:${cp.pct * 100}%"></i></div>
-      <div class="row-between"><span>${fmtDate(p.tenant.since)}</span><span>${cp.future ? 'Entrada próxima' : cp.monthsLeft <= 9 ? `<b class="warn">Vence en ${cp.monthsLeft} meses</b>` : `${cp.monthsLeft} meses restantes`}</span><span>${fmtDate(p.tenant.until)}</span></div>` : `<p class="muted">Desde ${fmtDate(p.tenant.since)}</p>`}
-    </section>`;
+  const ks = CONTRACTS[p.id] || [];
+  let tenantSec = '';
+  if (ks.length === 1) {
+    const k = ks[0];
+    tenantSec = `<section class="sec">
+      <h4>${p.status === 'reservado' ? 'Inquilino (reserva)' : 'Inquilino'}</h4>
+      <div class="tenant"><span class="avatar sm">${initials(k.tenant) || ICONS.key}</span>
+        <span><b>${esc(k.tenant)}</b><small>Desde ${fmtDate(k.start)}${k.note ? ` · ${esc(k.note)}` : ''}</small></span></div>
+      ${contactRows(k)}
+    </section>
+    <section class="sec"><h4>Contrato</h4>${termTiles(k)}</section>`;
+  } else if (ks.length > 1) {
+    const total = ks.reduce((s, k) => s + k.rent, 0);
+    const deposits = ks.reduce((s, k) => s + k.deposit, 0);
+    const nextEnd = ks.map((k) => k.end).sort()[0];
+    const nextRev = ks.map((k) => nextReview(k)).filter(Boolean).sort()[0];
+    tenantSec = `<section class="sec">
+      <h4>Contrato · ${ks.length} inquilinos</h4>
+      <div class="terms">
+        <div><small>Renta mensual total</small><b>${eur.format(total)}</b><span>${ks.length} contratos activos</span></div>
+        <div class="${monthsUntil(nextEnd) <= 9 ? 'attention' : ''}"><small>Próximo vencimiento</small><b>${fmtDate(nextEnd)}</b><span>${esc(ks.find((k) => k.end === nextEnd).unit)}</span></div>
+        <div><small>Próxima revisión</small><b>${nextRev ? fmtDate(nextRev) : '—'}</b><span>${nextRev ? esc(ks.find((k) => nextReview(k) === nextRev).unit) : ''}</span></div>
+        <div><small>Fianzas depositadas</small><b>${eur.format(deposits)}</b><span>INCASÒL</span></div>
+      </div>
+    </section>
+    <section class="sec"><h4>Inquilinos</h4><div class="units">${ks
+      .map((k) => `<details class="unit"><summary><span class="u-unit">${esc(k.unit)}</span><span class="u-name">${esc(k.tenant)}</span><span class="u-rent">${eur.format(k.rent)}</span></summary>
+        ${contactRows(k)}${termTiles(k)}</details>`)
+      .join('')}</div></section>`;
   } else {
-    occupancy = `<section class="sec">
-      <h4>Comercialización</h4>
-      <dl class="kv"><dt>Visitas este mes</dt><dd>${p.visits ?? 0}</dd><dt>Renta publicada</dt><dd>${eur.format(p.rent)}/mes</dd></dl>
-    </section>`;
+    const msg = p.reform
+      ? `En reforma hasta el ${fmtDate(p.reform.end)}. Renta prevista: ${eur.format(p.rent)}/mes.`
+      : `Disponible para alquilar. Renta publicada: ${eur.format(p.rent)}/mes.`;
+    tenantSec = `<section class="sec"><h4>Inquilino</h4><div class="no-tenant">Sin inquilino. ${msg}</div></section>`;
   }
 
-  const payments = p.payments.length
-    ? `<section class="sec"><h4>Cobros últimos 6 meses</h4><div class="pays">${p.payments
-        .map((s, i) => `<span class="pay ${s}" title="${MONTHS[i]}: ${s === 'ok' ? 'cobrado' : 'con retraso'}"><i>${s === 'ok' ? '✓' : '!'}</i>${MONTHS[i]}</span>`)
-        .join('')}</div></section>`
-    : '';
-
+  const sum = library.summary(p);
+  const year = DEMO_TODAY.slice(0, 4);
   const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.address}, ${p.city}`)}`;
 
   return `
@@ -220,13 +218,20 @@ function panelHtml(p) {
       <span class="owner">Propiedad: <b>${esc(p.owner)}</b></span>
     </div>
     <div class="panel-body">
-      <div class="metrics">${metrics.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('')}</div>
-      ${occupancy}
-      ${payments}
-      <section class="sec"><h4>Incidencias <span class="count">${p.incidents.length}</span></h4><ul class="incidents">${incidents}</ul></section>
-      <section class="sec"><h4>Características</h4><div class="tags">${p.features.map((f) => `<span>${esc(f)}</span>`).join('')}</div></section>
-      <div class="next"><span>📌</span><div><small>Próximo hito</small><b>${esc(p.next)}</b></div></div>
-      <a class="btn" href="${maps}" target="_blank" rel="noopener">Ver ubicación en el mapa ↗</a>
+      ${tenantSec}
+      <section class="lib-cta">
+        <div class="lib-cta-head"><span class="lib-cta-ico">🗂️</span><div><b>Biblioteca y contabilidad</b><small>${library.docCount(p)} documentos · facturas, recibos y contratos</small></div></div>
+        <div class="lib-cta-nums">
+          <div><small>Ingresos ${year}</small><b class="pos">${eur.format(sum.income)}</b></div>
+          <div><small>Gastos ${year}</small><b>${eur.format(sum.expenses)}</b></div>
+          <div><small>Resultado</small><b class="${sum.net >= 0 ? 'pos' : 'neg'}">${sum.net >= 0 ? '+' : '−'}${eur.format(Math.abs(sum.net))}</b></div>
+        </div>
+        <div class="lib-cta-actions">
+          <button class="btn" data-library="docs">Abrir biblioteca</button>
+          <button class="btn btn-soft" data-library="cont">Ver contabilidad</button>
+        </div>
+      </section>
+      <a class="maplink" href="${maps}" target="_blank" rel="noopener">Ver ubicación en Google Maps ↗</a>
     </div>`;
 }
 
@@ -255,6 +260,21 @@ function select(id) {
     panel.scrollTop = 0;
     scene.select(id);
     $('#closePanel').addEventListener('click', () => select(null));
+    panel.querySelectorAll('[data-library]').forEach((b) => b.addEventListener('click', () => library.open(p, b.dataset.library)));
+    panel.querySelectorAll('[data-copy]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copy);
+          b.textContent = 'Copiado';
+        } catch {
+          const r = document.createRange();
+          r.selectNodeContents(b.previousElementSibling);
+          getSelection().removeAllRanges();
+          getSelection().addRange(r);
+        }
+        setTimeout(() => (b.textContent = 'Copiar'), 1500);
+      }),
+    );
     $('#hint').classList.add('hide');
   }
   document.body.classList.toggle('has-panel', !!id);

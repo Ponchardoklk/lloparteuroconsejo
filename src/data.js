@@ -277,3 +277,41 @@ export const ACTIVITY = [
   { time: 'Ayer', icon: '📝', text: "Señal recibida · Xalet de l'Estany (Puigcerdà)", tone: 'info' },
   { time: 'Ayer', icon: '⚠️', text: 'Recibo impagado · Oficinas Poblenou', tone: 'media' },
 ];
+
+// ---------------------------------------------------------------------------------------
+// Contratos de arrendamiento por inmueble (datos de ejemplo; teléfonos y correos ficticios).
+// deposit: fianza legal (en Catalunya se deposita en l'INCASÒL). guarantee: garantía adicional, si la hay.
+// La revisión de renta es anual, en la fecha aniversario del contrato.
+const c = (unit, tenant, phone, email, start, end, rent, depositMonths = 1, extra = {}) => ({
+  unit, tenant, phone, email, start, end, rent, deposit: rent * depositMonths, depositMonths, ...extra,
+});
+
+const BUILDING_TENANTS = [
+  ['1º 1ª', 'Laura Martí Font'], ['1º 2ª', 'David Romero Gil'], ['2º 1ª', 'Núria Soler Camps'],
+  ['2º 2ª', 'Àlex Ferrer Vila'], ['3º 1ª', 'Elena Castro Ruiz'], ['4º 1ª', 'Marc Riba Pons'],
+  ['4º 2ª', 'Sofia Navarro León'], ['5º 1ª', 'Pol Garcia Bosch'], ['5º 2ª', 'Irene Molina Sanz'],
+  ['6º 1ª', 'Xavier Roig Puig'], ['6º 2ª', 'Clara Mas Oliva'],
+];
+const BUILDING_RENTS = [1580, 1600, 1640, 1650, 1660, 1680, 1690, 1700, 1710, 1740, 1750];
+
+export const CONTRACTS = {
+  'LL-001': [c(null, 'Marta Vidal Soler', '+34 600 112 412', 'marta.vidal@example.com', '2023-09-01', '2027-08-31', 2850, 1, { guarantee: 5700 })],
+  'LL-002': [
+    c('Casa 3', 'Jordi Puig Mas', '+34 600 203 118', 'jordi.puig@example.com', '2022-02-01', '2027-01-31', 1400),
+    c('Casa 5', 'Anna Bosch Rovira', '+34 600 203 527', 'anna.bosch@example.com', '2023-07-01', '2028-06-30', 1400),
+    c('Casa 7', 'Familia Duran Pérez', '+34 600 203 733', 'duran.perez@example.com', '2024-04-01', '2029-03-31', 1400),
+  ],
+  'LL-003': BUILDING_TENANTS.map(([unit, name], i) => {
+    const slug = name.split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const start = `${2022 + (i % 4)}-${String(((i * 5) % 12) + 1).padStart(2, '0')}-01`;
+    const end = `${2027 + (i % 4)}-${String(((i * 5) % 12) + 1).padStart(2, '0')}-01`;
+    return c(unit, name, `+34 600 41${i} ${String(100 + i * 37).slice(0, 3)}`, `${slug}.${unit.replace(/\W/g, '').toLowerCase()}@example.com`, start, end, BUILDING_RENTS[i]);
+  }),
+  'LL-005': [c(null, 'Forn Artesà Sant Jordi SL', '+34 930 000 527', 'administracio@example.com', '2021-03-01', '2031-02-28', 5600, 2, { contact: 'Josep Casals (gerente)' })],
+  'LL-007': [c(null, 'Família Ortega', '+34 600 718 090', 'ortega.familia@example.com', '2026-12-01', '2027-11-30', 3400, 1, { note: 'Reserva: señal de 3.400 € pagada' })],
+  'LL-008': [c(null, 'Nexa Digital Studio SL', '+34 930 000 818', 'finanzas@example.com', '2020-06-01', '2027-05-31', 9800, 2, { contact: 'Raquel Ibáñez (finanzas)', guarantee: 19600 })],
+  'LL-010': [c(null, 'Pau Serra i Lluís Gómez', '+34 600 104 302', 'pau.serra@example.com', '2024-10-01', '2029-09-30', 1650)],
+};
+
+// Fecha de referencia de los datos de ejemplo (la contabilidad llega hasta aquí).
+export const DEMO_TODAY = '2026-11-17';

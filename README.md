@@ -13,9 +13,18 @@ cartera) se abre su ficha con todos los detalles.
   oficinas y casa de pueblo), cada uno con su modelo propio. Marcador flotante y borde de parcela con el color de su estado.
 - **Animaciones**: entrada de los edificios, coches y furgonetas circulando, peatones, grúa trabajando en el piso en
   reforma, agua de las piscinas, árboles moviéndose y sombras de nubes.
-- **Ficha del inmueble**: tipo y referencia, dirección, estado (alquilado / disponible / en reforma / reservado),
-  propietario, renta, superficie, habitaciones, baños, año, certificado energético, inquilino y progreso del contrato,
-  avance y presupuesto de la reforma, cobros de los últimos 6 meses, incidencias, características y próximo hito.
+- **Ficha del inmueble**: lo esencial para gestionar el alquiler. Inquilino con teléfono y correo (con botón de copiar)
+  y las condiciones del contrato: renta, vencimiento, próxima revisión anual y fianza depositada en l'INCASÒL. En
+  edificios o adosados con varios contratos se ven el resumen y la lista de inquilinos desplegable.
+- **Biblioteca y contabilidad de cada inmueble** (botón en la ficha):
+  - *Documentos*: carpetas tipo Dropbox (contratos y fianzas, recibos de alquiler, comunidad, honorarios, impuestos,
+    seguros, suministros, mantenimiento, obras y otros), ordenadas por mes, con buscador, orden, vista previa de cada
+    factura (base, IVA, total y estado) y subida de archivos con botón o arrastrando.
+  - *Contabilidad*: por año, ingresos cobrados, gastos, resultado neto y pendiente de cobro; gráfico mensual de
+    ingresos y gastos, gastos por categoría y lista de movimientos enlazada a su documento. Se pueden añadir gastos
+    y exportar a CSV.
+  - Los archivos y gastos que se añaden se guardan en el navegador (IndexedDB, `src/store.js`). Para compartirlos
+    entre varias personas hay que conectar esa capa a un servidor o almacenamiento en la nube.
 - **Panel de control**: KPIs (inmuebles, ocupación, renta mensual, incidencias), buscador, filtros por estado,
   actividad reciente, modo día/noche (las ventanas y farolas se encienden), zoom y vista general.
 - Adaptado a móvil (la ficha se abre como hoja inferior).
@@ -46,5 +55,8 @@ tiene además el anillo exterior en ±28).
 | `src/builders.js` | Modelos low-poly de cada tipo de inmueble, vehículos y peatones |
 | `src/town.js` | Puigcerdà: estany, campanar, casas, pinos, montañas y nieve |
 | `src/paths.js` | Recorridos de los vehículos |
-| `src/data.js` | Inmuebles y actividad de ejemplo |
+| `src/data.js` | Inmuebles, contratos y actividad de ejemplo |
+| `src/ledger.js` | Movimientos y documentos de ejemplo de cada inmueble, resumen contable |
+| `src/library.js` | Biblioteca de documentos y contabilidad |
+| `src/store.js` | Guardado de archivos y gastos añadidos (IndexedDB) |
 | `src/styles.css` | Estilos (claro/oscuro, responsive) |
