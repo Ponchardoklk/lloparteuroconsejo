@@ -1,0 +1,20 @@
+{
+  "name": "lloparteuroconsejo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mapa animado de gestión de inmuebles (vista isométrica 3D)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.11",
+    "vite-plugin-singlefile": "2.0.3"
+  }
+}
